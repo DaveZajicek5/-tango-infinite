@@ -47,15 +47,17 @@
   function stopTimer() { clearInterval(tick); tick = null; paintTimer(); }
   function cellRow(i) { return Math.floor(i / N); }
   function cellCol(i) { return i % N; }
+  function sameRow(cells) { return cells.length > 1 && cells.every(c => cellRow(c) === cellRow(cells[0])); }
+  function sameCol(cells) { return cells.length > 1 && cells.every(c => cellCol(c) === cellCol(cells[0])); }
   function lineCellsFromStep(step) {
     const cells = [step.cell, ...(step.support || [])];
-    if (cells.length > 1 && cells.every(c => cellRow(c) === cellRow(cells[0]))) return E.lineCells(true, cellRow(step.cell));
-    if (cells.length > 1 && cells.every(c => cellCol(c) === cellCol(cells[0]))) return E.lineCells(false, cellCol(step.cell));
+    if (sameRow(cells)) return E.lineCells(true, cellRow(step.cell));
+    if (sameCol(cells)) return E.lineCells(false, cellCol(step.cell));
     return cells;
   }
 
   function save() {
-    try { localStorage.setItem('tangoSaveV10', JSON.stringify({ puzzle, state, started, solved, startedAt, solvedAt, hintCount })); } catch (_) {}
+    try { localStorage.setItem('tangoSaveV11', JSON.stringify({ puzzle, state, started, solved, startedAt, solvedAt, hintCount })); } catch (_) {}
   }
 
   function render() {
@@ -98,19 +100,48 @@
 
   function stepKind(step) {
     const s = (step.reason || '').toLowerCase();
-    if (s.includes('započtení') || s.includes('vychází') || s.includes('variant')) return 'line';
+    if (s.includes('započtení') || s.includes('vychází') || s.includes('variant') || s.includes('tvar')) return 'line';
     if (s.includes('znak') || s.includes('=') || s.includes('×')) return 'relation';
     if (s.includes('dvě') || s.includes('troj') || s.includes('tři stej')) return 'triple';
     if (s.includes('tři slunce') || s.includes('tři měsíce') || s.includes('přesně')) return 'balance';
     return 'basic';
   }
 
+  function symbol(v) { return v === SUN ? '☀' : '☾'; }
+  function opposite(v) { return v === SUN ? MOON : SUN; }
+  function patternText(pattern, pos) { return pattern.split('').map((v, i) => i === pos ? `[${symbol(v)}]` : symbol(v)).join(' '); }
+  function lineName(isRow, n) { return isRow ? `řádku ${n + 1}` : `sloupci ${'ABCDEF'[n]}`; }
+
+  function forcedLineInfo(step) {
+    const out = [];
+    for (const isRow of [true, false]) {
+      const line = isRow ? cellRow(step.cell) : cellCol(step.cell);
+      const cells = E.lineCells(isRow, line);
+      const pos = cells.indexOf(step.cell);
+      const candidates = E.lineCandidates(state, isRow, line, puzzle.signs);
+      if (candidates.length && candidates.every(p => p[pos] === step.value)) out.push({ isRow, line, cells, pos, candidates });
+    }
+    if (!out.length) return null;
+    out.sort((a, b) => a.candidates.length - b.candidates.length);
+    return out[0];
+  }
+
+  function concreteLineHint(step) {
+    const info = forcedLineInfo(step);
+    if (!info) return 'V naznačené linii zkus platné doplnění. Modré pole vychází stejně ve všech možnostech.';
+    const shown = info.candidates.slice(0, 3).map(p => patternText(p, info.pos)).join(' / ');
+    const more = info.candidates.length > 3 ? ` / … (${info.candidates.length} možností celkem)` : '';
+    const good = symbol(step.value), bad = symbol(opposite(step.value));
+    if (info.candidates.length === 1) return `V ${lineName(info.isRow, info.line)} zbývá jediný platný tvar: ${shown}. V modrém místě je ${good}; ${bad} by nedal žádné platné doplnění.`;
+    return `V ${lineName(info.isRow, info.line)} zbývají jen tyto tvary: ${shown}${more}. V každém je na modrém místě ${good}; ${bad} by nedal žádné platné doplnění.`;
+  }
+
   function hintText(step) {
     switch (stepKind(step)) {
-      case 'relation': return 'Zvýrazněný znak určuje vztah mezi poli: = znamená stejný symbol, × opačný. Proto do modrého pole patří slabě zobrazený symbol.';
-      case 'triple': return 'V naznačené linii by druhá možnost vytvořila tři stejné symboly za sebou. To pravidla zakazují, takže modré pole musí být slabě zobrazený symbol.';
-      case 'balance': return 'V naznačené linii už je dosažen limit jednoho symbolu. Zbývající prázdná pole v té linii musí být opačný symbol.';
-      case 'line': return 'Dívej se jen na naznačenou řadu/sloupec. Po odečtení neplatných doplnění zbývají jen varianty, které mají v modrém poli slabě zobrazený symbol.';
+      case 'relation': return 'Znak mezi žlutým a modrým polem určuje vztah: = stejné, × opačné. Proto do modrého pole patří slabě zobrazený symbol.';
+      case 'triple': return 'Druhá možnost by vytvořila tři stejné symboly za sebou. Proto do modrého pole patří slabě zobrazený symbol.';
+      case 'balance': return 'V naznačené linii už je dosažen limit jednoho symbolu. Zbývající prázdná pole musí být opačný symbol.';
+      case 'line': return concreteLineHint(step);
       default: return step.reason || 'Do modrého pole patří slabě zobrazený symbol.';
     }
   }
@@ -187,7 +218,7 @@
 
   function load() {
     try {
-      const saved = JSON.parse(localStorage.getItem('tangoSaveV10') || localStorage.getItem('tangoSaveV9') || localStorage.getItem('tangoSaveV8') || localStorage.getItem('tangoSaveV7') || 'null');
+      const saved = JSON.parse(localStorage.getItem('tangoSaveV11') || localStorage.getItem('tangoSaveV10') || localStorage.getItem('tangoSaveV9') || localStorage.getItem('tangoSaveV8') || localStorage.getItem('tangoSaveV7') || 'null');
       if (!saved?.puzzle || !saved?.state) return false;
       puzzle = saved.puzzle; state = saved.state; started = !!saved.started && !saved.solved; solved = !!saved.solved; startedAt = saved.startedAt || null; solvedAt = saved.solvedAt || null; hintCount = saved.hintCount || 0; clearHints(); render();
       if (solved) { stopTimer(); show(`Obnoveno vyřešené za ${fmt(elapsed())}.`); }
