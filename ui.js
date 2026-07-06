@@ -7,19 +7,71 @@
 
   const boardEl = document.getElementById('board');
   const msg = document.getElementById('msg');
-  const timerEl = document.getElementById('timer');
   const newBtn = document.getElementById('new');
   const hintBtn = document.getElementById('hint');
   const resetBtn = document.getElementById('reset');
   const checkBtn = document.getElementById('check');
 
+  let timerEl = document.getElementById('timer');
+  let startCover = null;
+  let boardWrap = null;
+
   let puzzle = null;
   let state = [];
   let solved = false;
+  let gameStarted = false;
   let startedAt = null;
   let solvedAt = null;
   let tick = null;
   let lastHint = null;
+
+  function ensureExtraUi() {
+    if (!timerEl) {
+      timerEl = document.createElement('span');
+      timerEl.id = 'timer';
+      timerEl.className = 'timer';
+      timerEl.textContent = '0:00';
+      const header = document.querySelector('header');
+      if (header) header.appendChild(timerEl);
+    }
+
+    boardWrap = boardEl.closest('.boardWrap') || boardEl.parentElement;
+    if (boardWrap && getComputedStyle(boardWrap).position === 'static') boardWrap.style.position = 'relative';
+
+    const style = document.createElement('style');
+    style.textContent = `
+      #timer.timer{display:inline-flex!important;align-items:center;justify-content:center;min-width:64px;font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;background:#111827;color:#fff;border-radius:999px;padding:8px 12px;margin-left:8px;z-index:20}
+      .startCover{position:absolute;inset:-8px;z-index:30;border-radius:22px;background:rgba(247,245,239,.96);display:flex;align-items:center;justify-content:center;padding:18px;text-align:center;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+      .startCover.hidden{display:none}
+      .startBox{max-width:290px}.startTitle{font-size:24px;font-weight:850;margin-bottom:8px}.startText{font-size:15px;line-height:1.35;color:#6b6f76;margin-bottom:14px}.startBtn{border:0;border-radius:16px;padding:15px 24px;font-size:17px;font-weight:800;background:#111827;color:white}.hintCell{background:#dbeafe!important;outline:4px solid #60a5fa;outline-offset:-6px}.supportCell{background:#fff7cc!important}.finished{cursor:default}.wrong{outline:4px solid rgba(217,48,37,.65)!important;outline-offset:-6px}`;
+    document.head.appendChild(style);
+  }
+
+  function createStartCover() {
+    if (!boardWrap) return;
+    if (startCover) startCover.remove();
+
+    startCover = document.createElement('div');
+    startCover.className = 'startCover';
+    startCover.innerHTML = '<div class="startBox"><div class="startTitle">Hra připravena</div><div class="startText">Mřížka je už vygenerovaná, ale zakrytá. Čas začne běžet až po startu.</div><button class="startBtn" type="button">Start</button></div>';
+    startCover.querySelector('button').addEventListener('click', startGame);
+    boardWrap.appendChild(startCover);
+  }
+
+  function showStartCover() {
+    createStartCover();
+    if (startCover) startCover.classList.remove('hidden');
+  }
+
+  function hideStartCover() {
+    if (startCover) startCover.classList.add('hidden');
+  }
+
+  function setButtonState() {
+    hintBtn.disabled = solved || !gameStarted;
+    checkBtn.disabled = solved || !gameStarted;
+    resetBtn.disabled = !puzzle;
+  }
 
   function token(value) {
     if (value == null) return '';
@@ -61,7 +113,7 @@
 
   function save() {
     try {
-      localStorage.setItem('tangoSaveV3', JSON.stringify({ puzzle, state, solved, startedAt, solvedAt }));
+      localStorage.setItem('tangoSaveV4', JSON.stringify({ puzzle, state, solved, gameStarted, startedAt, solvedAt }));
     } catch (_) {}
   }
 
@@ -70,7 +122,6 @@
 
     for (let row = 0; row < N; row++) {
       const tr = document.createElement('tr');
-
       for (let col = 0; col < N; col++) {
         const cell = E.cellIndex(row, col);
         const td = document.createElement('td');
@@ -95,17 +146,15 @@
 
         tr.appendChild(td);
       }
-
       boardEl.appendChild(tr);
     }
 
+    setButtonState();
     save();
   }
 
   function clearMarks() {
-    boardEl.querySelectorAll('.wrong,.hintCell,.supportCell').forEach(el => {
-      el.classList.remove('wrong', 'hintCell', 'supportCell');
-    });
+    boardEl.querySelectorAll('.wrong,.hintCell,.supportCell').forEach(el => el.classList.remove('wrong', 'hintCell', 'supportCell'));
   }
 
   function markCells(cells, cls) {
@@ -118,99 +167,110 @@
   function markImmediateViolation() {
     boardEl.querySelectorAll('.wrong').forEach(el => el.classList.remove('wrong'));
     const bad = S.immediateViolation(state, puzzle.signs);
-
     if (bad) {
       markCells(bad.cells, 'wrong');
       show(bad.text, 'bad');
       return true;
     }
-
     return false;
   }
 
   function finishIfSolved() {
     if (solved) return;
-
     if (state.join('') === puzzle.sol && S.completeAndLegal(state, puzzle.signs)) {
       solved = true;
+      gameStarted = false;
       solvedAt = Date.now();
       lastHint = null;
       stopTimer();
+      hideStartCover();
       render();
       show(`Vyřešeno za ${format(elapsed())} 🎉 Pole jsou zamčená.`, 'good');
     }
   }
 
   function tap(cell) {
-    if (solved || puzzle.givens[cell] != null) return;
-
+    if (!gameStarted || solved || puzzle.givens[cell] != null) return;
     state[cell] = state[cell] == null ? SUN : state[cell] === SUN ? MOON : null;
     lastHint = null;
     clearMarks();
     render();
-
     if (!markImmediateViolation()) show('');
     finishIfSolved();
   }
 
-  function newGame() {
+  function preparePuzzle(textWhenReady) {
     newBtn.disabled = true;
     hintBtn.disabled = true;
+    checkBtn.disabled = true;
     show('Generuju lidsky řešitelnou mřížku…');
+    stopTimer();
+    timerEl.textContent = '0:00';
 
     setTimeout(() => {
       puzzle = E.generatePuzzle();
       state = puzzle.givens.slice();
       solved = false;
-      startedAt = Date.now();
+      gameStarted = false;
+      startedAt = null;
       solvedAt = null;
       lastHint = null;
       render();
-      startTimer();
-      show(`Hotovo. ${puzzle.clues} indicií, jediné řešení, ověřeno lidským solverem.`);
+      showStartCover();
+      show(textWhenReady || `Připraveno. ${puzzle.clues} indicií, jediné řešení, ověřeno lidským solverem.`);
       newBtn.disabled = false;
-      hintBtn.disabled = false;
+      setButtonState();
     }, 20);
+  }
+
+  function startGame() {
+    if (!puzzle || solved) return;
+    gameStarted = true;
+    startedAt = Date.now();
+    solvedAt = null;
+    hideStartCover();
+    startTimer();
+    setButtonState();
+    show('');
+    save();
   }
 
   function resetGame() {
     if (!puzzle) return;
     state = puzzle.givens.slice();
     solved = false;
-    startedAt = Date.now();
+    gameStarted = false;
+    startedAt = null;
     solvedAt = null;
     lastHint = null;
+    stopTimer();
+    timerEl.textContent = '0:00';
     clearMarks();
     render();
-    startTimer();
-    show('Resetováno. Čas běží znovu.');
+    showStartCover();
+    show('Resetováno. Čas začne až po Start.');
   }
 
   function checkGame() {
+    if (!gameStarted || solved) return;
     clearMarks();
     if (markImmediateViolation()) return;
 
     let complete = true;
     let wrong = 0;
-
     for (let i = 0; i < N * N; i++) {
       if (state[i] == null) complete = false;
       else if (state[i] !== puzzle.sol[i]) wrong++;
     }
 
-    if (wrong) {
-      show(`${wrong} polí nesedí s finálním řešením. Automaticky červeně značím jen tahy, které už teď porušují pravidla.`, 'bad');
-    } else if (!complete) {
-      show('Zatím bez zjevného porušení pravidel, ale není hotovo.');
-    } else {
-      finishIfSolved();
-    }
+    if (wrong) show(`${wrong} polí nesedí s finálním řešením. Automaticky červeně značím jen tahy, které už teď porušují pravidla.`, 'bad');
+    else if (!complete) show('Zatím bez zjevného porušení pravidel, ale není hotovo.');
+    else finishIfSolved();
   }
 
   function hint() {
-    if (solved) return;
+    if (!gameStarted || solved) return;
     clearMarks();
-
     const step = S.logicalStep(state, puzzle);
 
     if (!step) {
@@ -237,31 +297,46 @@
 
   function load() {
     try {
-      const saved = JSON.parse(localStorage.getItem('tangoSaveV3') || 'null');
+      const saved = JSON.parse(localStorage.getItem('tangoSaveV4') || 'null');
       if (!saved || !saved.puzzle || !saved.state) return false;
-
       puzzle = saved.puzzle;
       state = saved.state;
       solved = !!saved.solved;
-      startedAt = saved.startedAt || Date.now();
+      gameStarted = !!saved.gameStarted && !solved;
+      startedAt = saved.startedAt || null;
       solvedAt = saved.solvedAt || null;
       lastHint = null;
       render();
-      solved ? stopTimer() : startTimer();
-      show(solved ? `Obnoveno vyřešené za ${format(elapsed())}.` : 'Obnoveno z minula.');
+      if (solved) {
+        stopTimer();
+        hideStartCover();
+        show(`Obnoveno vyřešené za ${format(elapsed())}.`);
+      } else if (gameStarted) {
+        hideStartCover();
+        startTimer();
+        show('Obnoveno z minula.');
+      } else {
+        stopTimer();
+        timerEl.textContent = '0:00';
+        showStartCover();
+        show('Připraveno. Čas začne až po Start.');
+      }
+      setButtonState();
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  newBtn.addEventListener('click', newGame);
+  ensureExtraUi();
+
+  newBtn.addEventListener('click', () => preparePuzzle());
   resetBtn.addEventListener('click', resetGame);
   checkBtn.addEventListener('click', checkGame);
   hintBtn.addEventListener('click', hint);
   document.addEventListener('dblclick', event => event.preventDefault(), { passive: false });
 
-  if (!load()) newGame();
+  if (!load()) preparePuzzle();
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
