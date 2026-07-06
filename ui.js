@@ -50,7 +50,6 @@
   function createStartCover() {
     if (!boardWrap) return;
     if (startCover) startCover.remove();
-
     startCover = document.createElement('div');
     startCover.className = 'startCover';
     startCover.innerHTML = '<div class="startBox"><div class="startTitle">Hra připravena</div><div class="startText">Mřížka je už vygenerovaná, ale zakrytá. Čas začne běžet až po startu.</div><button class="startBtn" type="button">Start</button></div>';
@@ -113,13 +112,12 @@
 
   function save() {
     try {
-      localStorage.setItem('tangoSaveV4', JSON.stringify({ puzzle, state, solved, gameStarted, startedAt, solvedAt }));
+      localStorage.setItem('tangoSaveV5', JSON.stringify({ puzzle, state, solved, gameStarted, startedAt, solvedAt }));
     } catch (_) {}
   }
 
   function render() {
     boardEl.innerHTML = '';
-
     for (let row = 0; row < N; row++) {
       const tr = document.createElement('tr');
       for (let col = 0; col < N; col++) {
@@ -143,18 +141,21 @@
             td.appendChild(sp);
           }
         }
-
         tr.appendChild(td);
       }
       boardEl.appendChild(tr);
     }
-
     setButtonState();
     save();
   }
 
   function clearMarks() {
     boardEl.querySelectorAll('.wrong,.hintCell,.supportCell').forEach(el => el.classList.remove('wrong', 'hintCell', 'supportCell'));
+  }
+
+  function clearHint() {
+    lastHint = null;
+    hintBtn.textContent = 'Nápověda';
   }
 
   function markCells(cells, cls) {
@@ -181,7 +182,7 @@
       solved = true;
       gameStarted = false;
       solvedAt = Date.now();
-      lastHint = null;
+      clearHint();
       stopTimer();
       hideStartCover();
       render();
@@ -192,7 +193,7 @@
   function tap(cell) {
     if (!gameStarted || solved || puzzle.givens[cell] != null) return;
     state[cell] = state[cell] == null ? SUN : state[cell] === SUN ? MOON : null;
-    lastHint = null;
+    clearHint();
     clearMarks();
     render();
     if (!markImmediateViolation()) show('');
@@ -214,7 +215,7 @@
       gameStarted = false;
       startedAt = null;
       solvedAt = null;
-      lastHint = null;
+      clearHint();
       render();
       showStartCover();
       show(textWhenReady || `Připraveno. ${puzzle.clues} indicií, jediné řešení, ověřeno lidským solverem.`);
@@ -242,7 +243,7 @@
     gameStarted = false;
     startedAt = null;
     solvedAt = null;
-    lastHint = null;
+    clearHint();
     stopTimer();
     timerEl.textContent = '0:00';
     clearMarks();
@@ -274,7 +275,7 @@
     const step = S.logicalStep(state, puzzle);
 
     if (!step) {
-      lastHint = null;
+      clearHint();
       render();
       show('Nevidím jednoduchý odvoditelný krok z aktuální pozice. Některý předchozí tah může být legální, ale mimo řešení.', 'bad');
       return;
@@ -288,16 +289,15 @@
       return;
     }
 
-    state[step.cell] = step.value;
-    lastHint = { cell: step.cell, support: step.support || [] };
+    lastHint = { cell: step.cell, support: step.support || [], value: step.value };
     render();
-    show(`${S.cellName(step.cell)} = ${S.typeName(step.value)}. ${step.reason}`);
-    finishIfSolved();
+    hintBtn.textContent = 'Nápověda';
+    show(`Zkus ${S.cellName(step.cell)} = ${S.typeName(step.value)}. ${step.reason}`);
   }
 
   function load() {
     try {
-      const saved = JSON.parse(localStorage.getItem('tangoSaveV4') || 'null');
+      const saved = JSON.parse(localStorage.getItem('tangoSaveV5') || localStorage.getItem('tangoSaveV4') || 'null');
       if (!saved || !saved.puzzle || !saved.state) return false;
       puzzle = saved.puzzle;
       state = saved.state;
@@ -305,7 +305,7 @@
       gameStarted = !!saved.gameStarted && !solved;
       startedAt = saved.startedAt || null;
       solvedAt = saved.solvedAt || null;
-      lastHint = null;
+      clearHint();
       render();
       if (solved) {
         stopTimer();
@@ -329,7 +329,6 @@
   }
 
   ensureExtraUi();
-
   newBtn.addEventListener('click', () => preparePuzzle());
   resetBtn.addEventListener('click', resetGame);
   checkBtn.addEventListener('click', checkGame);
