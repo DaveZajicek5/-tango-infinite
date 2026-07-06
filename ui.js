@@ -43,7 +43,9 @@
       #timer.timer{display:inline-flex!important;align-items:center;justify-content:center;min-width:64px;font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;background:#111827;color:#fff;border-radius:999px;padding:8px 12px;margin-left:8px;z-index:20}
       .startCover{position:absolute;inset:-8px;z-index:30;border-radius:22px;background:rgba(247,245,239,.96);display:flex;align-items:center;justify-content:center;padding:18px;text-align:center;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
       .startCover.hidden{display:none}
-      .startBox{max-width:290px}.startTitle{font-size:24px;font-weight:850;margin-bottom:8px}.startText{font-size:15px;line-height:1.35;color:#6b6f76;margin-bottom:14px}.startBtn{border:0;border-radius:16px;padding:15px 24px;font-size:17px;font-weight:800;background:#111827;color:white}.hintCell{background:#dbeafe!important;outline:4px solid #60a5fa;outline-offset:-6px}.supportCell{background:#fff7cc!important}.finished{cursor:default}.wrong{outline:4px solid rgba(217,48,37,.65)!important;outline-offset:-6px}`;
+      .startBox{max-width:290px}.startTitle{font-size:24px;font-weight:850;margin-bottom:8px}.startText{font-size:15px;line-height:1.35;color:#6b6f76;margin-bottom:14px}.startBtn{border:0;border-radius:16px;padding:15px 24px;font-size:17px;font-weight:800;background:#111827;color:white}
+      .hintCell{background:#dbeafe!important;outline:4px solid #60a5fa;outline-offset:-6px}.supportCell{background:#fff7cc!important}.finished{cursor:default}.wrong{outline:4px solid rgba(217,48,37,.65)!important;outline-offset:-6px}.hintGhost{opacity:.38;filter:saturate(.9)}
+    `;
     document.head.appendChild(style);
   }
 
@@ -72,9 +74,9 @@
     resetBtn.disabled = !puzzle;
   }
 
-  function token(value) {
+  function token(value, ghost = false) {
     if (value == null) return '';
-    return `<span class="token ${value === SUN ? 'sun' : 'moon'}"></span>`;
+    return `<span class="token ${value === SUN ? 'sun' : 'moon'}${ghost ? ' hintGhost' : ''}"></span>`;
   }
 
   function show(text, cls = '') {
@@ -110,7 +112,7 @@
 
   function save() {
     try {
-      localStorage.setItem('tangoSaveV7', JSON.stringify({ puzzle, state, solved, gameStarted, startedAt, solvedAt }));
+      localStorage.setItem('tangoSaveV8', JSON.stringify({ puzzle, state, solved, gameStarted, startedAt, solvedAt }));
     } catch (_) {}
   }
 
@@ -123,12 +125,15 @@
         const td = document.createElement('td');
         td.dataset.i = String(cell);
 
+        const isHint = lastHint && lastHint.cell === cell;
+        const isSupport = lastHint && lastHint.support && lastHint.support.includes(cell);
+
         if (puzzle.givens[cell] != null) td.classList.add('locked');
         if (solved) td.classList.add('finished');
-        if (lastHint && lastHint.cell === cell) td.classList.add('hintCell');
-        if (lastHint && lastHint.support && lastHint.support.includes(cell)) td.classList.add('supportCell');
+        if (isHint) td.classList.add('hintCell');
+        if (isSupport) td.classList.add('supportCell');
 
-        td.innerHTML = token(state[cell]);
+        td.innerHTML = isHint && state[cell] == null ? token(lastHint.value, true) : token(state[cell]);
         td.addEventListener('click', () => tap(cell));
 
         for (const sign of puzzle.signs) {
@@ -176,12 +181,10 @@
     const sim = puz.givens.slice();
     const counts = { kroky: 0, vztah: 0, trojice: 0, pocet: 0, varianty: 0 };
     let score = 0;
-
     for (let guard = 0; guard < 80; guard++) {
       if (sim.join('') === puz.sol && S.completeAndLegal(sim, puz.signs)) break;
       const step = S.logicalStep(sim, puz);
       if (!step || step.type !== 'fill') { score += 20; break; }
-
       const kind = classifyStep(step);
       counts.kroky++;
       if (kind === 'vztah') { counts.vztah++; score += 1.0; }
@@ -189,30 +192,23 @@
       else if (kind === 'počet') { counts.pocet++; score += 1.4; }
       else if (kind === 'varianty') { counts.varianty++; score += 3.2; }
       else score += 1.0;
-
       sim[step.cell] = step.value;
     }
-
     score += Math.max(0, 15 - puz.clues) * 0.35;
     if (puz.shape) score += (puz.shape.pureZigzags || 0) * 0.7 + Math.max(0, (puz.shape.strongZigzags || 0) - 2) * 0.35;
-
     let label = 'Lehká';
     if (score >= 27 || counts.varianty >= 3 || counts.kroky >= 22) label = 'Těžší';
     else if (score >= 18 || counts.varianty >= 1 || counts.kroky >= 16) label = 'Střední';
-
     return { label, score: Math.round(score), ...counts };
   }
 
-  function difficultySummary(diff, clues) {
-    const extra = diff.varianty ? `, ${diff.varianty}× varianta linie` : '';
-    return `Obtížnost: ${diff.label} • ${diff.kroky} odvoditelných kroků${extra} • ${clues} indicií`;
+  function puzzleSummary() {
+    if (!puzzle) return '';
+    return `Připraveno. ${puzzle.clues} indicií.`;
   }
 
   function hintText(step) {
-    const value = S.typeName(step.value);
-    const support = step.support || [];
-    const intro = support.length ? 'Žlutá pole ukazují důvod. ' : '';
-    return `${intro}Modré pole má být ${value}. ${step.reason}`;
+    return step.reason || '';
   }
 
   function markImmediateViolation() {
@@ -257,7 +253,6 @@
     show('Generuju lidsky řešitelnou mřížku…');
     stopTimer();
     timerEl.textContent = '0:00';
-
     setTimeout(() => {
       puzzle = E.generatePuzzle();
       puzzle.difficulty = estimateDifficulty(puzzle);
@@ -269,7 +264,7 @@
       clearHint();
       render();
       showStartCover();
-      show(textWhenReady || `Připraveno. ${difficultySummary(puzzle.difficulty, puzzle.clues)}.`);
+      show(textWhenReady || puzzleSummary());
       newBtn.disabled = false;
       setButtonState();
     }, 20);
@@ -283,7 +278,7 @@
     hideStartCover();
     startTimer();
     setButtonState();
-    show(puzzle.difficulty ? difficultySummary(puzzle.difficulty, puzzle.clues) : '');
+    show('');
     save();
   }
 
@@ -307,14 +302,12 @@
     if (!gameStarted || solved) return;
     clearMarks();
     if (markImmediateViolation()) return;
-
     let complete = true;
     let wrong = 0;
     for (let i = 0; i < N * N; i++) {
       if (state[i] == null) complete = false;
       else if (state[i] !== puzzle.sol[i]) wrong++;
     }
-
     if (wrong) show(`${wrong} polí nesedí s finálním řešením. Automaticky červeně značím jen tahy, které už teď porušují pravidla.`, 'bad');
     else if (!complete) show('Zatím bez zjevného porušení pravidel, ale není hotovo.');
     else finishIfSolved();
@@ -324,14 +317,12 @@
     if (!gameStarted || solved) return;
     clearMarks();
     const step = S.logicalStep(state, puzzle);
-
     if (!step) {
       clearHint();
       render();
       show('Nevidím jednoduchý odvoditelný krok z aktuální pozice. Některý předchozí tah může být legální, ale mimo řešení.', 'bad');
       return;
     }
-
     if (step.type === 'conflict') {
       lastHint = { support: step.cells || [] };
       render();
@@ -339,7 +330,6 @@
       show(step.text, 'bad');
       return;
     }
-
     lastHint = { cell: step.cell, support: step.support || [], value: step.value };
     render();
     hintBtn.textContent = 'Nápověda';
@@ -348,7 +338,7 @@
 
   function load() {
     try {
-      const saved = JSON.parse(localStorage.getItem('tangoSaveV7') || localStorage.getItem('tangoSaveV6') || localStorage.getItem('tangoSaveV5') || localStorage.getItem('tangoSaveV4') || 'null');
+      const saved = JSON.parse(localStorage.getItem('tangoSaveV8') || localStorage.getItem('tangoSaveV7') || localStorage.getItem('tangoSaveV6') || localStorage.getItem('tangoSaveV5') || localStorage.getItem('tangoSaveV4') || 'null');
       if (!saved || !saved.puzzle || !saved.state) return false;
       puzzle = saved.puzzle;
       if (!puzzle.difficulty) puzzle.difficulty = estimateDifficulty(puzzle);
@@ -366,12 +356,12 @@
       } else if (gameStarted) {
         hideStartCover();
         startTimer();
-        show(difficultySummary(puzzle.difficulty, puzzle.clues));
+        show('');
       } else {
         stopTimer();
         timerEl.textContent = '0:00';
         showStartCover();
-        show(`Připraveno. ${difficultySummary(puzzle.difficulty, puzzle.clues)}.`);
+        show(puzzleSummary());
       }
       setButtonState();
       return true;
@@ -386,9 +376,7 @@
   checkBtn.addEventListener('click', checkGame);
   hintBtn.addEventListener('click', hint);
   document.addEventListener('dblclick', event => event.preventDefault(), { passive: false });
-
   if (!load()) preparePuzzle();
-
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
   }
