@@ -25,6 +25,20 @@ window.TangoEngine = (() => {
     return false;
   }
 
+  function transitionCount(text) {
+    let total = 0;
+    for (let i = 0; i < text.length - 1; i++) if (text[i] !== text[i + 1]) total++;
+    return total;
+  }
+
+  function isPureZigzag(text) {
+    return text === '010101' || text === '101010';
+  }
+
+  function isStrongZigzag(text) {
+    return transitionCount(text) >= 4;
+  }
+
   const ROWS = [];
   for (let n = 0; n < 64; n++) {
     const row = n.toString(2).padStart(6, '0');
@@ -37,6 +51,10 @@ window.TangoEngine = (() => {
 
   function lineCells(isRow, lineNumber) {
     return Array.from({ length: N }, (_, k) => isRow ? cellIndex(lineNumber, k) : cellIndex(k, lineNumber));
+  }
+
+  function lineText(board, isRow, lineNumber) {
+    return lineCells(isRow, lineNumber).map(index => board[index]).join('');
   }
 
   function buildAllBoards() {
@@ -76,6 +94,33 @@ window.TangoEngine = (() => {
   }
 
   const ALL_BOARDS = buildAllBoards();
+
+  function boardShapeScore(board) {
+    let pureZigzags = 0;
+    let strongZigzags = 0;
+
+    for (const isRow of [true, false]) {
+      for (let line = 0; line < N; line++) {
+        const text = lineText(board, isRow, line);
+        if (isPureZigzag(text)) pureZigzags++;
+        if (isStrongZigzag(text)) strongZigzags++;
+      }
+    }
+
+    return { pureZigzags, strongZigzags };
+  }
+
+  function acceptableBoardShape(board) {
+    const score = boardShapeScore(board);
+    return score.pureZigzags <= 1 && score.strongZigzags <= 4;
+  }
+
+  const NICE_BOARDS = ALL_BOARDS.filter(acceptableBoardShape);
+
+  function randomSolution() {
+    const pool = NICE_BOARDS.length ? NICE_BOARDS : ALL_BOARDS;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
 
   function signCells(sign) {
     const a = cellIndex(sign.r, sign.c);
@@ -138,7 +183,8 @@ window.TangoEngine = (() => {
       else signs.push({ t: 's', r: clue.r, c: clue.c, d: clue.d, same: clue.same });
     }
 
-    return { sol: solution, givens, signs, clues: clues.length, human: true };
+    const shape = boardShapeScore(solution);
+    return { sol: solution, givens, signs, clues: clues.length, human: true, shape };
   }
 
   function uniquelySolvable(clues, solution) {
@@ -172,8 +218,8 @@ window.TangoEngine = (() => {
   }
 
   function generatePuzzle() {
-    for (let attempt = 0; attempt < 100; attempt++) {
-      const solution = ALL_BOARDS[Math.floor(Math.random() * ALL_BOARDS.length)];
+    for (let attempt = 0; attempt < 160; attempt++) {
+      const solution = randomSolution();
       let clues = [];
       const pool = shuffle(allCluesForSolution(solution));
 
@@ -184,7 +230,7 @@ window.TangoEngine = (() => {
           const possiblePuzzle = puzzleFromClues(clues, solution);
 
           if (window.TangoSolver && TangoSolver.humanSolves(possiblePuzzle)) {
-            const removals = shuffle(clues.slice()).slice(0, 45);
+            const removals = shuffle(clues.slice()).slice(0, 55);
 
             for (const clueToRemove of removals) {
               if (clues.length <= 10) break;
@@ -202,15 +248,16 @@ window.TangoEngine = (() => {
       }
     }
 
-    const fallbackSolution = ALL_BOARDS[Math.floor(Math.random() * ALL_BOARDS.length)];
+    const fallbackSolution = randomSolution();
     const fallbackClues = allCluesForSolution(fallbackSolution).filter(clue => clue.t === 'g').slice(0, 18);
     return puzzleFromClues(fallbackClues, fallbackSolution);
   }
 
   return {
-    N, H, SUN, MOON, ROWS, ALL_BOARDS,
-    shuffle, countSymbol, hasThreeTogether,
-    cellIndex, lineCells, signCells, lineCandidates,
+    N, H, SUN, MOON, ROWS, ALL_BOARDS, NICE_BOARDS,
+    shuffle, countSymbol, hasThreeTogether, transitionCount,
+    isPureZigzag, isStrongZigzag, boardShapeScore,
+    cellIndex, lineCells, lineText, signCells, lineCandidates,
     generatePuzzle, uniquelySolvable, puzzleFromClues
   };
 })();
