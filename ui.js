@@ -112,7 +112,7 @@
 
   function save() {
     try {
-      localStorage.setItem('tangoSaveV5', JSON.stringify({ puzzle, state, solved, gameStarted, startedAt, solvedAt }));
+      localStorage.setItem('tangoSaveV6', JSON.stringify({ puzzle, state, solved, gameStarted, startedAt, solvedAt }));
     } catch (_) {}
   }
 
@@ -163,6 +163,17 @@
       const el = boardEl.querySelector(`[data-i="${cell}"]`);
       if (el) el.classList.add(cls);
     }
+  }
+
+  function hintText(step) {
+    const target = S.cellName(step.cell);
+    const value = S.typeName(step.value);
+    const support = step.support || [];
+    const supportNames = support.map(S.cellName).join(', ');
+    const intro = support.length
+      ? `Nejdřív se podívej na žlutá pole (${supportNames}). Modré pole ${target} je další odvoditelný tah.`
+      : `Modré pole ${target} je další odvoditelný tah.`;
+    return `${intro} Závěr: ${target} = ${value}. Proč: ${step.reason}`;
   }
 
   function markImmediateViolation() {
@@ -292,12 +303,12 @@
     lastHint = { cell: step.cell, support: step.support || [], value: step.value };
     render();
     hintBtn.textContent = 'Nápověda';
-    show(`Zkus ${S.cellName(step.cell)} = ${S.typeName(step.value)}. ${step.reason}`);
+    show(hintText(step));
   }
 
   function load() {
     try {
-      const saved = JSON.parse(localStorage.getItem('tangoSaveV5') || localStorage.getItem('tangoSaveV4') || 'null');
+      const saved = JSON.parse(localStorage.getItem('tangoSaveV6') || localStorage.getItem('tangoSaveV5') || localStorage.getItem('tangoSaveV4') || 'null');
       if (!saved || !saved.puzzle || !saved.state) return false;
       puzzle = saved.puzzle;
       state = saved.state;
