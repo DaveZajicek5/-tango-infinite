@@ -94,9 +94,7 @@
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
   }
 
-  function paintTimer() {
-    timerEl.textContent = format(elapsed());
-  }
+  function paintTimer() { timerEl.textContent = format(elapsed()); }
 
   function startTimer() {
     if (tick) clearInterval(tick);
@@ -112,7 +110,7 @@
 
   function save() {
     try {
-      localStorage.setItem('tangoSaveV6', JSON.stringify({ puzzle, state, solved, gameStarted, startedAt, solvedAt }));
+      localStorage.setItem('tangoSaveV7', JSON.stringify({ puzzle, state, solved, gameStarted, startedAt, solvedAt }));
     } catch (_) {}
   }
 
@@ -165,15 +163,56 @@
     }
   }
 
+  function classifyStep(step) {
+    const text = (step.reason || '').toLowerCase();
+    if (text.includes('započtení') || text.includes('vychází') || text.includes('variant')) return 'varianty';
+    if (text.includes('znak') || text.includes('=') || text.includes('×')) return 'vztah';
+    if (text.includes('dvě') || text.includes('tři') || text.includes('troj')) return 'trojice';
+    if (text.includes('tři slunce') || text.includes('tři měsíce') || text.includes('přesně')) return 'počet';
+    return 'základ';
+  }
+
+  function estimateDifficulty(puz) {
+    const sim = puz.givens.slice();
+    const counts = { kroky: 0, vztah: 0, trojice: 0, pocet: 0, varianty: 0 };
+    let score = 0;
+
+    for (let guard = 0; guard < 80; guard++) {
+      if (sim.join('') === puz.sol && S.completeAndLegal(sim, puz.signs)) break;
+      const step = S.logicalStep(sim, puz);
+      if (!step || step.type !== 'fill') { score += 20; break; }
+
+      const kind = classifyStep(step);
+      counts.kroky++;
+      if (kind === 'vztah') { counts.vztah++; score += 1.0; }
+      else if (kind === 'trojice') { counts.trojice++; score += 1.2; }
+      else if (kind === 'počet') { counts.pocet++; score += 1.4; }
+      else if (kind === 'varianty') { counts.varianty++; score += 3.2; }
+      else score += 1.0;
+
+      sim[step.cell] = step.value;
+    }
+
+    score += Math.max(0, 15 - puz.clues) * 0.35;
+    if (puz.shape) score += (puz.shape.pureZigzags || 0) * 0.7 + Math.max(0, (puz.shape.strongZigzags || 0) - 2) * 0.35;
+
+    let label = 'Lehká';
+    if (score >= 27 || counts.varianty >= 3 || counts.kroky >= 22) label = 'Těžší';
+    else if (score >= 18 || counts.varianty >= 1 || counts.kroky >= 16) label = 'Střední';
+
+    return { label, score: Math.round(score), ...counts };
+  }
+
+  function difficultySummary(diff, clues) {
+    const extra = diff.varianty ? `, ${diff.varianty}× varianta linie` : '';
+    return `Obtížnost: ${diff.label} • ${diff.kroky} odvoditelných kroků${extra} • ${clues} indicií`;
+  }
+
   function hintText(step) {
-    const target = S.cellName(step.cell);
     const value = S.typeName(step.value);
     const support = step.support || [];
-    const supportNames = support.map(S.cellName).join(', ');
-    const intro = support.length
-      ? `Nejdřív se podívej na žlutá pole (${supportNames}). Modré pole ${target} je další odvoditelný tah.`
-      : `Modré pole ${target} je další odvoditelný tah.`;
-    return `${intro} Závěr: ${target} = ${value}. Proč: ${step.reason}`;
+    const intro = support.length ? 'Žlutá pole ukazují důvod. ' : '';
+    return `${intro}Modré pole má být ${value}. ${step.reason}`;
   }
 
   function markImmediateViolation() {
@@ -221,6 +260,7 @@
 
     setTimeout(() => {
       puzzle = E.generatePuzzle();
+      puzzle.difficulty = estimateDifficulty(puzzle);
       state = puzzle.givens.slice();
       solved = false;
       gameStarted = false;
@@ -229,7 +269,7 @@
       clearHint();
       render();
       showStartCover();
-      show(textWhenReady || `Připraveno. ${puzzle.clues} indicií, jediné řešení, ověřeno lidským solverem.`);
+      show(textWhenReady || `Připraveno. ${difficultySummary(puzzle.difficulty, puzzle.clues)}.`);
       newBtn.disabled = false;
       setButtonState();
     }, 20);
@@ -243,7 +283,7 @@
     hideStartCover();
     startTimer();
     setButtonState();
-    show('');
+    show(puzzle.difficulty ? difficultySummary(puzzle.difficulty, puzzle.clues) : '');
     save();
   }
 
@@ -308,9 +348,10 @@
 
   function load() {
     try {
-      const saved = JSON.parse(localStorage.getItem('tangoSaveV6') || localStorage.getItem('tangoSaveV5') || localStorage.getItem('tangoSaveV4') || 'null');
+      const saved = JSON.parse(localStorage.getItem('tangoSaveV7') || localStorage.getItem('tangoSaveV6') || localStorage.getItem('tangoSaveV5') || localStorage.getItem('tangoSaveV4') || 'null');
       if (!saved || !saved.puzzle || !saved.state) return false;
       puzzle = saved.puzzle;
+      if (!puzzle.difficulty) puzzle.difficulty = estimateDifficulty(puzzle);
       state = saved.state;
       solved = !!saved.solved;
       gameStarted = !!saved.gameStarted && !solved;
@@ -325,12 +366,12 @@
       } else if (gameStarted) {
         hideStartCover();
         startTimer();
-        show('Obnoveno z minula.');
+        show(difficultySummary(puzzle.difficulty, puzzle.clues));
       } else {
         stopTimer();
         timerEl.textContent = '0:00';
         showStartCover();
-        show('Připraveno. Čas začne až po Start.');
+        show(`Připraveno. ${difficultySummary(puzzle.difficulty, puzzle.clues)}.`);
       }
       setButtonState();
       return true;
