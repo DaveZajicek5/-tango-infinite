@@ -12,64 +12,23 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <title>Tango∞</title>
 <style>
-:root{--bg:#f7f5ef;--card:#fff;--line:#ddd6ca;--ink:#202124;--muted:#6b6f76;--accent:#0a66c2;--sun:#f7b731;--sun2:#cf7624;--moon:#5aa2f2;--moon2:#1b5eb8;--bad:#d93025;--good:#188038;--cell:min(14.2vw,58px)}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;min-height:100svh;display:flex;justify-content:center}main{width:min(100%,520px);padding:max(16px,env(safe-area-inset-top)) 16px max(18px,env(safe-area-inset-bottom))}header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 14px}h1{font-size:30px;line-height:1;margin:0;font-weight:800;letter-spacing:-.03em}.pill{font-size:13px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 10px}.card{background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:0 10px 26px rgba(0,0,0,.05);padding:16px}.boardWrap{display:flex;justify-content:center;margin:8px 0 16px}.board{border-collapse:collapse;touch-action:manipulation;user-select:none}.board td{position:relative;width:var(--cell);height:var(--cell);border:3px solid var(--line);background:#fff;text-align:center;vertical-align:middle}.board td.locked{background:#eee9df}.board td.wrong{outline:4px solid color-mix(in srgb,var(--bad) 55%,transparent);outline-offset:-6px}.token{display:inline-block;position:relative;width:32px;height:32px;border-radius:50%;vertical-align:middle}.sun{background:var(--sun);border:4px solid var(--sun2)}.moon{background:var(--moon);border:4px solid var(--moon2)}.moon:after{content:"";position:absolute;left:10px;top:-7px;width:30px;height:38px;border-radius:50%;background:#fff}.locked .moon:after{background:#eee9df}.sg{position:absolute;z-index:5;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--bg);color:#8a744e;font-size:22px;font-weight:800;line-height:1}.sg.r{right:-14px;top:50%;transform:translateY(-50%)}.sg.b{bottom:-14px;left:50%;transform:translateX(-50%)}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}button{border:0;border-radius:16px;padding:14px 12px;font-size:16px;font-weight:750;background:#e5e7eb;color:#202124}button.primary{background:#111827;color:#fff}button.secondary{background:#dbeafe;color:#0a4d9c}button:active{transform:translateY(1px)}#msg{min-height:42px;margin-top:4px;font-size:15px;line-height:1.35;color:var(--muted)}#msg.good{color:var(--good);font-weight:750}#msg.bad{color:var(--bad);font-weight:750}.help{font-size:14px;color:var(--muted);line-height:1.45;margin-top:12px}.legend{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tiny{width:18px;height:18px;border-width:3px}.tiny.moon:after{left:5px;top:-5px;width:18px;height:23px}.footer{font-size:12px;color:var(--muted);text-align:center;margin-top:14px}
+:root{--bg:#f7f5ef;--card:#fff;--line:#ddd6ca;--ink:#202124;--muted:#6b6f76;--sun:#f7b731;--sun2:#cf7624;--moon:#5aa2f2;--moon2:#1b5eb8;--bad:#d93025;--good:#188038;--hint:#dbeafe;--support:#fff7cc;--cell:min(14.2vw,58px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;min-height:100svh;display:flex;justify-content:center}main{width:min(100%,520px);padding:max(16px,env(safe-area-inset-top)) 16px max(18px,env(safe-area-inset-bottom))}header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 14px}h1{font-size:30px;line-height:1;margin:0;font-weight:800;letter-spacing:-.03em}.topRight{display:flex;align-items:center;gap:8px}.pill{font-size:13px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 10px}.timer{font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;background:#111827;color:#fff;border-radius:999px;padding:8px 12px}.card{background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:0 10px 26px rgba(0,0,0,.05);padding:16px}.boardWrap{display:flex;justify-content:center;margin:8px 0 16px}.board{border-collapse:collapse;touch-action:manipulation;user-select:none}.board td{position:relative;width:var(--cell);height:var(--cell);border:3px solid var(--line);background:#fff;text-align:center;vertical-align:middle}.board td.locked{background:#eee9df}.board td.finished{cursor:default}.board td.wrong{outline:4px solid rgba(217,48,37,.65);outline-offset:-6px}.board td.hintCell{background:var(--hint);outline:4px solid #60a5fa;outline-offset:-6px}.board td.supportCell{background:var(--support)}.token{display:inline-block;position:relative;width:32px;height:32px;border-radius:50%;vertical-align:middle}.sun{background:var(--sun);border:4px solid var(--sun2)}.moon{background:var(--moon);border:4px solid var(--moon2)}.moon:after{content:"";position:absolute;left:10px;top:-7px;width:30px;height:38px;border-radius:50%;background:#fff}.locked .moon:after{background:#eee9df}.hintCell .moon:after{background:var(--hint)}.supportCell .moon:after{background:var(--support)}.sg{position:absolute;z-index:5;display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--bg);color:#8a744e;font-size:22px;font-weight:800;line-height:1}.sg.r{right:-14px;top:50%;transform:translateY(-50%)}.sg.b{bottom:-14px;left:50%;transform:translateX(-50%)}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}button{border:0;border-radius:16px;padding:14px 12px;font-size:16px;font-weight:750;background:#e5e7eb;color:#202124}button.primary{background:#111827;color:#fff}button.secondary{background:#dbeafe;color:#0a4d9c}button:disabled{opacity:.55}button:active{transform:translateY(1px)}#msg{min-height:64px;margin-top:4px;font-size:15px;line-height:1.35;color:var(--muted)}#msg.good{color:var(--good);font-weight:750}#msg.bad{color:var(--bad);font-weight:750}.help{font-size:14px;color:var(--muted);line-height:1.45;margin-top:12px}.legend{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tiny{width:18px;height:18px;border-width:3px}.tiny.moon:after{left:5px;top:-5px;width:18px;height:23px}.footer{font-size:12px;color:var(--muted);text-align:center;margin-top:14px}
 </style>
 </head>
 <body>
 <main>
-<header><h1>Tango∞</h1><span class="pill">offline PWA</span></header>
+<header><h1>Tango∞</h1><div class="topRight"><span id="timer" class="timer">0:00</span><span class="pill">offline PWA</span></div></header>
 <section class="card">
 <div class="boardWrap"><table id="board" class="board" aria-label="Tango grid"></table></div>
-<div class="buttons">
-<button id="new" class="primary">Nová hra</button>
-<button id="hint" class="secondary">Nápověda</button>
-<button id="reset">Reset</button>
-<button id="check">Zkontrolovat</button>
-</div>
+<div class="buttons"><button id="new" class="primary">Nová hra</button><button id="hint" class="secondary">Nápověda</button><button id="reset">Reset</button><button id="check">Zkontrolovat</button></div>
 <div id="msg"></div>
-<div class="help">
-<div class="legend"><span>Klepnutím střídáš</span><span class="token sun tiny"></span><span>→</span><span class="token moon tiny"></span><span>→ prázdné.</span></div>
-<p>Pravidla: v každém řádku i sloupci jsou přesně 3 slunce a 3 měsíce. Nikde nesmí být 3 stejné symboly vedle sebe. Znak <b>=</b> znamená stejné sousední buňky, znak <b>×</b> opačné.</p>
-</div>
+<div class="help"><div class="legend"><span>Klepnutím střídáš</span><span class="token sun tiny"></span><span>→</span><span class="token moon tiny"></span><span>→ prázdné.</span></div><p>Červeně se značí jen okamžité porušení pravidel: víc než 3 symboly v řádku/sloupci, tři stejné vedle sebe, nebo porušené =/×. Nápověda doplní další lidsky odvoditelný krok a vysvětlí proč.</p></div>
 </section>
 <div class="footer">Generované lokálně v telefonu. Žádný denní limit.</div>
 </main>
-<script>
-(() => {
-'use strict';
-const N=6,H=3,SUN='1',MOON='0';
-const boardEl=document.getElementById('board'), msg=document.getElementById('msg');
-let puzzle=null,state=[];
-function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function countChar(s,ch){let n=0;for(const x of s)if(x===ch)n++;return n}
-function hasTriple(s){for(let i=0;i<s.length-2;i++)if(s[i]===s[i+1]&&s[i]===s[i+2])return true;return false}
-function rows(){const out=[];for(let n=0;n<64;n++){const s=n.toString(2).padStart(6,'0');if(countChar(s,'1')===H&&!hasTriple(s))out.push(s)}return out}
-function buildBoards(){const rs=rows(),out=[];function rec(r,part,ones){if(r===N){out.push(part.join(''));return}for(const row of rs){let ok=true,next=ones.slice();for(let c=0;c<N;c++){if(row[c]==='1')next[c]++;const rem=N-r-1;if(next[c]>H||next[c]+rem<H){ok=false;break}if(r>=2&&part[r-1][c]===row[c]&&part[r-2][c]===row[c]){ok=false;break}}if(ok)rec(r+1,part.concat(row),next)}}rec(0,[],Array(N).fill(0));return out}
-const ALL=buildBoards();
-function token(v){return v==null?'':`<span class="token ${v===SUN?'sun':'moon'}"></span>`}
-function edge(k){const a=k.r*N+k.c;return [a,k.d==='h'?a+1:a+N]}
-function okOne(b,k){if(k.t==='g')return b[k.i]===k.v;const [a,z]=edge(k);return (b[a]===b[z])===k.same}
-function matches(b,cons){for(const k of cons)if(!okOne(b,k))return false;return true}
-function countMatches(cons,limit=2){let n=0,first=null;for(const b of ALL){if(matches(b,cons)){n++;if(!first)first=b;if(n>=limit)break}}return {n,first}}
-function makePuzzle(){const sol=ALL[Math.random()*ALL.length|0];let pool=[];for(let i=0;i<N*N;i++)pool.push({t:'g',i,v:sol[i]});for(let r=0;r<N;r++)for(let c=0;c<N-1;c++)pool.push({t:'s',r,c,d:'h',same:sol[r*N+c]===sol[r*N+c+1]});for(let r=0;r<N-1;r++)for(let c=0;c<N;c++)pool.push({t:'s',r,c,d:'v',same:sol[r*N+c]===sol[(r+1)*N+c]});shuffle(pool);let cons=[],possible=ALL.slice();for(const k of pool){const next=possible.filter(b=>okOne(b,k));cons.push(k);possible=next;if(possible.length===1)break}shuffle(cons);for(const k of cons.slice()){const trial=cons.filter(x=>x!==k);const r=countMatches(trial,2);if(r.n===1&&r.first===sol)cons=trial}const givens=Array(N*N).fill(null),signs=[];for(const k of cons){if(k.t==='g')givens[k.i]=k.v;else signs.push(k)}return {sol,givens,signs,clues:cons.length}}
-function render(){boardEl.innerHTML='';for(let r=0;r<N;r++){const tr=document.createElement('tr');for(let c=0;c<N;c++){const i=r*N+c,td=document.createElement('td');td.dataset.i=i;if(puzzle.givens[i]!=null)td.classList.add('locked');td.innerHTML=token(state[i]);td.addEventListener('click',()=>tap(i));for(const s of puzzle.signs){if(s.r===r&&s.c===c){const sp=document.createElement('span');sp.className='sg '+(s.d==='h'?'r':'b');sp.textContent=s.same?'=':'×';td.appendChild(sp)}}tr.appendChild(td)}boardEl.appendChild(tr)}save()}
-function tap(i){if(puzzle.givens[i]!=null)return;state[i]=state[i]==null?SUN:state[i]===SUN?MOON:null;clearMarks();render();msg.textContent='';msg.className=''}
-function clearMarks(){boardEl.querySelectorAll('.wrong').forEach(e=>e.classList.remove('wrong'))}
-function newGame(){document.getElementById('new').disabled=true;msg.textContent='Generuju unikátní mřížku…';msg.className='';setTimeout(()=>{puzzle=makePuzzle();state=puzzle.givens.slice();render();msg.textContent=`Hotovo. Zadání má ${puzzle.clues} indicií a jediné řešení.`;document.getElementById('new').disabled=false},20)}
-function reset(){state=puzzle.givens.slice();clearMarks();render();msg.textContent='Resetováno.';msg.className=''}
-function check(){clearMarks();let complete=true,wrong=0;for(let i=0;i<N*N;i++){if(state[i]==null)complete=false;else if(state[i]!==puzzle.sol[i]){wrong++;const el=boardEl.querySelector(`[data-i="${i}"]`);if(el)el.classList.add('wrong')}}if(wrong){msg.textContent=`${wrong} polí nesedí.`;msg.className='bad'}else if(!complete){msg.textContent='Zatím bez chyby, ale není hotovo.';msg.className=''}else{msg.textContent='Vyřešeno 🎉';msg.className='good'}}
-function hint(){let pick=-1;for(let i=0;i<N*N;i++)if(puzzle.givens[i]==null&&(state[i]==null||state[i]!==puzzle.sol[i])){pick=i;break}if(pick<0){check();return}state[pick]=puzzle.sol[pick];render();msg.textContent='Doplnil jsem jedno pole.';msg.className=''}
-function save(){try{localStorage.setItem('tangoSave',JSON.stringify({puzzle,state}))}catch(e){}}
-function load(){try{const x=JSON.parse(localStorage.getItem('tangoSave')||'null');if(x&&x.puzzle&&x.state){puzzle=x.puzzle;state=x.state;render();msg.textContent='Obnoveno z minula.';return true}}catch(e){}return false}
-document.getElementById('new').addEventListener('click',newGame);
-document.getElementById('reset').addEventListener('click',reset);
-document.getElementById('check').addEventListener('click',check);
-document.getElementById('hint').addEventListener('click',hint);
-document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});
-if(!load())newGame();
-if('serviceWorker'in navigator&&location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
-})();
-</script>
+<script src="engine.js?v=3"></script>
+<script src="solver.js?v=3"></script>
+<script src="ui.js?v=3"></script>
 </body>
 </html>
