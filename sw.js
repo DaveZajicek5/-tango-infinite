@@ -1,4 +1,4 @@
-const CACHE = 'tango-infinite-v16';
+const CACHE = 'tango-infinite-v17';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg', './engine.js', './solver.js', './hint-plus.js', './ui.js', './ui-next.js'];
 
 self.addEventListener('install', event => {
