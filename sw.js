@@ -1,5 +1,5 @@
-const CACHE = 'tango-infinite-v18';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg', './engine.js', './solver.js', './hint-plus.js', './ui.js', './ui-next.js'];
+const CACHE = 'tango-infinite-v20';
+const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg', './engine.js', './solver.js', './hint-plus.js', './li-puzzles.js', './archive-loader.js', './linkedin-generator.js', './ui.js', './ui-next.js'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
