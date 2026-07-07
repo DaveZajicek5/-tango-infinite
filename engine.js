@@ -5,9 +5,9 @@ window.TangoEngine = (() => {
   const MOON = '0';
 
   const PROFILES = [
-    { id: 'quick', label: 'Rychlá', weight: 3, signMin: 10, signMax: 14, blankMin: 7, blankMax: 12, abstractMax: 0, attempts: 45 },
-    { id: 'classic', label: 'Klasická', weight: 5, signMin: 7, signMax: 12, blankMin: 13, blankMax: 20, abstractMax: 1, attempts: 75 },
-    { id: 'hard', label: 'Těžší', weight: 3, signMin: 5, signMax: 10, blankMin: 19, blankMax: 27, abstractMax: 3, attempts: 95 }
+    { id: 'quick', label: 'Rychlá', weight: 3, signMin: 3, signMax: 6, blankMin: 7, blankMax: 12, abstractMax: 0, relationMax: 7, attempts: 55 },
+    { id: 'classic', label: 'Klasická', weight: 5, signMin: 3, signMax: 7, blankMin: 12, blankMax: 18, abstractMax: 1, relationMax: 8, attempts: 90 },
+    { id: 'hard', label: 'Těžší', weight: 3, signMin: 2, signMax: 6, blankMin: 16, blankMax: 24, abstractMax: 3, relationMax: 10, attempts: 120 }
   ];
 
   function shuffle(items) {
@@ -169,31 +169,38 @@ window.TangoEngine = (() => {
     return r.includes('započtení') || r.includes('vychází') || r.includes('zbývají') || r.includes('variant') || r.includes('tvar') || r.includes('platné doplnění');
   }
 
+  function isRelationReason(reason) {
+    const r = reason || '';
+    return r.includes('znak') || r.includes('=') || r.includes('×');
+  }
+
   function solveProfile(puzzle) {
-    if (!window.TangoSolver) return { ok: true, steps: 0, abstractLine: 0 };
+    if (!window.TangoSolver) return { ok: true, steps: 0, abstractLine: 0, relation: 0 };
     const sim = puzzle.givens.slice();
     let steps = 0;
     let abstractLine = 0;
+    let relation = 0;
     let conflicts = 0;
 
     for (let guard = 0; guard < 90; guard++) {
-      if (TangoSolver.completeAndLegal(sim, puzzle.signs)) return { ok: sim.join('') === puzzle.sol, steps, abstractLine, conflicts };
+      if (TangoSolver.completeAndLegal(sim, puzzle.signs)) return { ok: sim.join('') === puzzle.sol, steps, abstractLine, relation, conflicts };
       const step = TangoSolver.logicalStep(sim, puzzle);
-      if (!step) return { ok: false, steps, abstractLine, conflicts };
-      if (step.type === 'conflict') { conflicts++; return { ok: false, steps, abstractLine, conflicts }; }
-      if (step.type !== 'fill') return { ok: false, steps, abstractLine, conflicts };
+      if (!step) return { ok: false, steps, abstractLine, relation, conflicts };
+      if (step.type === 'conflict') { conflicts++; return { ok: false, steps, abstractLine, relation, conflicts }; }
+      if (step.type !== 'fill') return { ok: false, steps, abstractLine, relation, conflicts };
       if (isAbstractReason(step.reason)) abstractLine++;
+      if (isRelationReason(step.reason)) relation++;
       sim[step.cell] = step.value;
       steps++;
     }
 
-    return { ok: false, steps, abstractLine, conflicts };
+    return { ok: false, steps, abstractLine, relation, conflicts };
   }
 
   function profileAccepts(puzzle, profile) {
     const trace = solveProfile(puzzle);
     puzzle.profile = trace;
-    return trace.ok && trace.abstractLine <= profile.abstractMax;
+    return trace.ok && trace.abstractLine <= profile.abstractMax && trace.relation <= profile.relationMax;
   }
 
   function pickBalancedSigns(solution, profile) {
@@ -206,10 +213,10 @@ window.TangoEngine = (() => {
     for (const sign of all) {
       if (selected.length >= target) break;
       if (sign.d === 'h') {
-        if (rowCount[sign.r] >= 2 && Math.random() < 0.7) continue;
+        if (rowCount[sign.r] >= 1 && Math.random() < 0.65) continue;
         rowCount[sign.r]++;
       } else {
-        if (colCount[sign.c] >= 2 && Math.random() < 0.7) continue;
+        if (colCount[sign.c] >= 1 && Math.random() < 0.65) continue;
         colCount[sign.c]++;
       }
       selected.push(sign);
@@ -251,10 +258,7 @@ window.TangoEngine = (() => {
     } catch (_) {}
     const total = PROFILES.reduce((sum, p) => sum + p.weight, 0);
     let roll = Math.random() * total;
-    for (const profile of PROFILES) {
-      roll -= profile.weight;
-      if (roll <= 0) return profile;
-    }
+    for (const profile of PROFILES) { roll -= profile.weight; if (roll <= 0) return profile; }
     return PROFILES[1];
   }
 
@@ -273,9 +277,9 @@ window.TangoEngine = (() => {
 
       const blanks = givens.filter(v => v == null).length;
       const inRange = blanks >= profile.blankMin && blanks <= profile.blankMax;
-      const score = (inRange ? 30 : 0) - Math.abs(blanks - targetBlanks) * 2 + blanks * 0.35 - puzzle.profile.abstractLine * 5 - Math.abs(puzzle.profile.steps - (profile.blankMin + profile.blankMax) / 2) * 0.2;
+      const score = (inRange ? 30 : 0) - Math.abs(blanks - targetBlanks) * 2 + blanks * 0.3 - puzzle.profile.abstractLine * 7 - puzzle.profile.relation * 0.8;
       if (score > bestScore) { best = puzzle; bestScore = score; }
-      if (inRange && Math.random() < 0.35) return puzzle;
+      if (inRange && Math.random() < 0.3) return puzzle;
     }
 
     return best;
