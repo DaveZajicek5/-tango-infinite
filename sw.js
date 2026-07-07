@@ -1,4 +1,4 @@
-const CACHE = 'tango-infinite-v13';
+const CACHE = 'tango-infinite-v14';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg', './engine.js', './solver.js', './hint-plus.js', './ui.js', './ui-next.js'];
 
 self.addEventListener('install', event => {
@@ -23,16 +23,15 @@ async function getText(pathOrRequest) {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
-
   if (url.pathname.endsWith('/solver.js')) {
     event.respondWith((async () => {
-      const solver = await getText(event.request);
-      const hints = await getText('./hint-plus.js');
-      return new Response(solver + '\n' + hints, { headers: { 'Content-Type': 'application/javascript; charset=utf-8' } });
+      const solverText = await getText(event.request);
+      const hintText = await getText('./hint-plus.js');
+      const body = [solverText, hintText].join('\n');
+      return new Response(body, { headers: { 'Content-Type': 'application/javascript; charset=utf-8' } });
     })());
     return;
   }
-
   const request = url.pathname.endsWith('/ui.js') ? './ui-next.js' : event.request;
   event.respondWith(caches.match(request).then(hit => hit || fetch(request).then(response => {
     const copy = response.clone();
