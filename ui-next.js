@@ -30,7 +30,7 @@
     style.textContent = `
       #timer.timer{display:inline-flex!important;align-items:center;justify-content:center;min-width:64px;font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;background:#111827;color:#fff;border-radius:999px;padding:8px 12px;margin-left:8px;z-index:20}
       .startCover{position:absolute;inset:-8px;z-index:30;border-radius:22px;background:rgba(247,245,239,.97);display:flex;align-items:center;justify-content:center;padding:18px;text-align:center;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}.startCover.hidden{display:none}.startBox{max-width:292px}.startTitle{font-size:25px;font-weight:850;margin-bottom:8px}.startText{font-size:15px;line-height:1.35;color:#6b6f76;margin-bottom:14px}.startBtn{border:0;border-radius:16px;padding:15px 26px;font-size:17px;font-weight:850;background:#111827;color:#fff}
-      .focusCell{background:#faf6e8!important}.supportCell{background:#fff3af!important}.hintCell{background:#dbeafe!important;outline:4px solid #60a5fa;outline-offset:-6px}.wrong{outline:4px solid rgba(217,48,37,.68)!important;outline-offset:-6px}.hintGhost{opacity:.38;filter:saturate(.9)}.finished{cursor:default}
+      .focusCell{background:#faf6e8!important}.supportCell{background:#fff3af!important}.hintCell{background:#dbeafe!important;outline:4px solid #60a5fa;outline-offset:-6px}.wrong{outline:4px solid rgba(217,48,37,.68)!important;outline-offset:-6px}.hintGhost{opacity:.38;filter:saturate(.9)}.finished{cursor:default}.sg{pointer-events:none}.board td{cursor:pointer}button,.board td{touch-action:manipulation}
     `;
     document.head.appendChild(style);
   }
@@ -49,15 +49,37 @@
   function cellCol(i) { return i % N; }
   function sameRow(cells) { return cells.length > 1 && cells.every(c => cellRow(c) === cellRow(cells[0])); }
   function sameCol(cells) { return cells.length > 1 && cells.every(c => cellCol(c) === cellCol(cells[0])); }
+
+  function stepKind(step) {
+    const s = (step.reason || '').toLowerCase();
+    if (s.includes('započtení') || s.includes('vychází') || s.includes('zbývají') || s.includes('variant') || s.includes('tvar') || s.includes('platné doplnění')) return 'line';
+    if (s.includes('znak') || s.includes('=') || s.includes('×')) return 'relation';
+    if (s.includes('dvě') || s.includes('troj') || s.includes('tři stej')) return 'triple';
+    if (s.includes('tři slunce') || s.includes('tři měsíce') || s.includes('přesně')) return 'balance';
+    return 'basic';
+  }
+
   function lineCellsFromStep(step) {
+    if (step.focus?.length) return step.focus;
+    if (stepKind(step) === 'relation') return [step.cell, ...(step.support || [])];
     const cells = [step.cell, ...(step.support || [])];
     if (sameRow(cells)) return E.lineCells(true, cellRow(step.cell));
     if (sameCol(cells)) return E.lineCells(false, cellCol(step.cell));
     return cells;
   }
 
+  function puzzleSummary() {
+    if (!puzzle) return '';
+    const given = puzzle.givenCount ?? puzzle.givens.filter(v => v != null).length;
+    const signs = puzzle.signCount ?? puzzle.signs.length;
+    const blanks = N * N - given;
+    const mode = puzzle.mode ? `${puzzle.mode} · ` : '';
+    const profile = puzzle.profile ? ` · logických kroků: ${puzzle.profile.steps}${puzzle.profile.relation ? `, z =/×: ${puzzle.profile.relation}` : ''}` : '';
+    return `${mode}${given} daných polí, ${signs} znaků =/×, ${blanks} prázdných${profile}`;
+  }
+
   function save() {
-    try { localStorage.setItem('tangoSaveV11', JSON.stringify({ puzzle, state, started, solved, startedAt, solvedAt, hintCount })); } catch (_) {}
+    try { localStorage.setItem('tangoSaveV12', JSON.stringify({ puzzle, state, started, solved, startedAt, solvedAt, hintCount })); } catch (_) {}
   }
 
   function render() {
@@ -98,15 +120,6 @@
   function clearPaint() { boardEl.querySelectorAll('.wrong,.hintCell,.supportCell,.focusCell').forEach(e => e.classList.remove('wrong', 'hintCell', 'supportCell', 'focusCell')); }
   function mark(cells, cls) { for (const i of cells || []) boardEl.querySelector(`[data-i="${i}"]`)?.classList.add(cls); }
 
-  function stepKind(step) {
-    const s = (step.reason || '').toLowerCase();
-    if (s.includes('započtení') || s.includes('vychází') || s.includes('variant') || s.includes('tvar')) return 'line';
-    if (s.includes('znak') || s.includes('=') || s.includes('×')) return 'relation';
-    if (s.includes('dvě') || s.includes('troj') || s.includes('tři stej')) return 'triple';
-    if (s.includes('tři slunce') || s.includes('tři měsíce') || s.includes('přesně')) return 'balance';
-    return 'basic';
-  }
-
   function symbol(v) { return v === SUN ? '☀' : '☾'; }
   function opposite(v) { return v === SUN ? MOON : SUN; }
   function patternText(pattern, pos) { return pattern.split('').map((v, i) => i === pos ? `[${symbol(v)}]` : symbol(v)).join(' '); }
@@ -138,10 +151,10 @@
 
   function hintText(step) {
     switch (stepKind(step)) {
-      case 'relation': return 'Znak mezi žlutým a modrým polem určuje vztah: = stejné, × opačné. Proto do modrého pole patří slabě zobrazený symbol.';
-      case 'triple': return 'Druhá možnost by vytvořila tři stejné symboly za sebou. Proto do modrého pole patří slabě zobrazený symbol.';
-      case 'balance': return 'V naznačené linii už je dosažen limit jednoho symbolu. Zbývající prázdná pole musí být opačný symbol.';
-      case 'line': return concreteLineHint(step);
+      case 'relation': return step.reason || 'Žluté pole a znak =/× přímo určují modré pole: = stejné, × opačné.';
+      case 'triple': return step.reason || 'Druhá možnost by vytvořila tři stejné symboly za sebou. Proto do modrého pole patří slabě zobrazený symbol.';
+      case 'balance': return step.reason || 'V naznačené linii už je dosažen limit jednoho symbolu. Zbývající prázdná pole musí být opačný symbol.';
+      case 'line': return step.reason || concreteLineHint(step);
       default: return step.reason || 'Do modrého pole patří slabě zobrazený symbol.';
     }
   }
@@ -177,7 +190,7 @@
     cover?.remove();
     cover = document.createElement('div'); cover.className = 'startCover';
     const best = Number(localStorage.getItem('tangoBestMs') || 0);
-    cover.innerHTML = `<div class="startBox"><div class="startTitle">Hra připravena</div><div class="startText">Zadání je zakryté. Čas začne až po startu.${best ? `<br>Nejlepší čistý čas: ${fmt(best)}` : ''}</div><button class="startBtn" type="button">Start</button></div>`;
+    cover.innerHTML = `<div class="startBox"><div class="startTitle">Hra připravena</div><div class="startText">Zadání je zakryté. Čas začne až po startu.<br>${puzzleSummary()}${best ? `<br>Nejlepší čistý čas: ${fmt(best)}` : ''}</div><button class="startBtn" type="button">Start</button></div>`;
     cover.querySelector('button').addEventListener('click', startGame);
     boardWrap.appendChild(cover);
   }
@@ -188,7 +201,7 @@
     stopTimer(); timerEl.textContent = '0:00'; show('Generuju novou hru…');
     setTimeout(() => {
       puzzle = E.generatePuzzle(); state = puzzle.givens.slice(); started = false; solved = false; startedAt = null; solvedAt = null; hintCount = 0; clearHints(); render(); showCover();
-      show(`Připraveno. ${puzzle.clues} indicií.`); newBtn.disabled = false;
+      show(`Připraveno. ${puzzleSummary()}.`); newBtn.disabled = false;
     }, 20);
   }
 
@@ -212,18 +225,19 @@
     if (!step) { clearHints(); render(); show('Nevidím jednoduchý krok. Některý legální tah může vést mimo řešení.', 'bad'); return; }
     if (step.type === 'conflict') { hintMark = { support: step.cells || [], focus: step.cells || [] }; render(); mark(step.cells, 'wrong'); show(step.text, 'bad'); return; }
     hintCount++;
-    hintMark = { cell: step.cell, value: step.value, support: step.support || [], focus: lineCellsFromStep(step) };
+    const focus = lineCellsFromStep(step);
+    hintMark = { cell: step.cell, value: step.value, support: step.support || [], focus };
     render(); show(hintText(step));
   }
 
   function load() {
     try {
-      const saved = JSON.parse(localStorage.getItem('tangoSaveV11') || localStorage.getItem('tangoSaveV10') || localStorage.getItem('tangoSaveV9') || localStorage.getItem('tangoSaveV8') || localStorage.getItem('tangoSaveV7') || 'null');
+      const saved = JSON.parse(localStorage.getItem('tangoSaveV12') || localStorage.getItem('tangoSaveV11') || localStorage.getItem('tangoSaveV10') || localStorage.getItem('tangoSaveV9') || localStorage.getItem('tangoSaveV8') || localStorage.getItem('tangoSaveV7') || 'null');
       if (!saved?.puzzle || !saved?.state) return false;
       puzzle = saved.puzzle; state = saved.state; started = !!saved.started && !saved.solved; solved = !!saved.solved; startedAt = saved.startedAt || null; solvedAt = saved.solvedAt || null; hintCount = saved.hintCount || 0; clearHints(); render();
       if (solved) { stopTimer(); show(`Obnoveno vyřešené za ${fmt(elapsed())}.`); }
       else if (started) { hideCover(); startTimer(); show(''); }
-      else { stopTimer(); timerEl.textContent = '0:00'; showCover(); show(`Připraveno. ${puzzle.clues} indicií.`); }
+      else { stopTimer(); timerEl.textContent = '0:00'; showCover(); show(`Připraveno. ${puzzleSummary()}.`); }
       return true;
     } catch (_) { return false; }
   }
