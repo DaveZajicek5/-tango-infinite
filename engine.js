@@ -4,6 +4,12 @@ window.TangoEngine = (() => {
   const SUN = '1';
   const MOON = '0';
 
+  const PROFILES = [
+    { id: 'quick', label: 'Rychlá', weight: 3, signMin: 10, signMax: 14, blankMin: 7, blankMax: 12, abstractMax: 0, attempts: 45 },
+    { id: 'classic', label: 'Klasická', weight: 5, signMin: 7, signMax: 12, blankMin: 13, blankMax: 20, abstractMax: 1, attempts: 75 },
+    { id: 'hard', label: 'Těžší', weight: 3, signMin: 5, signMax: 10, blankMin: 19, blankMax: 27, abstractMax: 3, attempts: 95 }
+  ];
+
   function shuffle(items) {
     for (let i = items.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -11,6 +17,8 @@ window.TangoEngine = (() => {
     }
     return items;
   }
+
+  function randint(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
   function countSymbol(text, symbol) {
     let total = 0;
@@ -104,12 +112,8 @@ window.TangoEngine = (() => {
 
   function allSignCluesForSolution(solution) {
     const clues = [];
-    for (let row = 0; row < N; row++) {
-      for (let col = 0; col < N - 1; col++) clues.push({ t: 's', r: row, c: col, d: 'h', same: solution[cellIndex(row, col)] === solution[cellIndex(row, col + 1)] });
-    }
-    for (let row = 0; row < N - 1; row++) {
-      for (let col = 0; col < N; col++) clues.push({ t: 's', r: row, c: col, d: 'v', same: solution[cellIndex(row, col)] === solution[cellIndex(row + 1, col)] });
-    }
+    for (let row = 0; row < N; row++) for (let col = 0; col < N - 1; col++) clues.push({ t: 's', r: row, c: col, d: 'h', same: solution[cellIndex(row, col)] === solution[cellIndex(row, col + 1)] });
+    for (let row = 0; row < N - 1; row++) for (let col = 0; col < N; col++) clues.push({ t: 's', r: row, c: col, d: 'v', same: solution[cellIndex(row, col)] === solution[cellIndex(row + 1, col)] });
     return clues;
   }
 
@@ -125,10 +129,10 @@ window.TangoEngine = (() => {
     return clues.concat(signs);
   }
 
-  function puzzleFromParts(givens, signs, solution) {
+  function puzzleFromParts(givens, signs, solution, mode = null) {
     const shape = boardShapeScore(solution);
     const givenCount = givens.filter(v => v != null).length;
-    return { sol: solution, givens: givens.slice(), signs: signs.map(s => ({ ...s })), clues: givenCount + signs.length, givenCount, signCount: signs.length, human: true, shape };
+    return { sol: solution, givens: givens.slice(), signs: signs.map(s => ({ ...s })), clues: givenCount + signs.length, givenCount, signCount: signs.length, human: true, shape, mode };
   }
 
   function puzzleFromClues(clues, solution) {
@@ -186,15 +190,15 @@ window.TangoEngine = (() => {
     return { ok: false, steps, abstractLine, conflicts };
   }
 
-  function profileAccepts(puzzle, maxAbstractLine) {
-    const profile = solveProfile(puzzle);
-    puzzle.profile = profile;
-    return profile.ok && profile.abstractLine <= maxAbstractLine;
+  function profileAccepts(puzzle, profile) {
+    const trace = solveProfile(puzzle);
+    puzzle.profile = trace;
+    return trace.ok && trace.abstractLine <= profile.abstractMax;
   }
 
-  function pickBalancedSigns(solution) {
+  function pickBalancedSigns(solution, profile) {
     const all = shuffle(allSignCluesForSolution(solution));
-    const target = 8 + Math.floor(Math.random() * 5);
+    const target = randint(profile.signMin, profile.signMax);
     const selected = [];
     const rowCount = Array(N).fill(0);
     const colCount = Array(N).fill(0);
@@ -215,21 +219,23 @@ window.TangoEngine = (() => {
     return selected;
   }
 
-  function unsolveCells(solution, signs, maxAbstractLine) {
+  function unsolveCells(solution, signs, profile, targetBlanks) {
     const givens = solution.split('');
+    let blanks = 0;
     let removed = true;
     let passes = 0;
 
-    while (removed && passes < 3) {
+    while (removed && passes < 4 && blanks < targetBlanks) {
       removed = false;
       passes++;
       for (const cell of shuffle(Array.from({ length: N * N }, (_, i) => i))) {
+        if (blanks >= targetBlanks) break;
         if (givens[cell] == null) continue;
         const old = givens[cell];
         givens[cell] = null;
-        const puzzle = puzzleFromParts(givens, signs, solution);
+        const puzzle = puzzleFromParts(givens, signs, solution, profile.label);
         const clues = cluesFromParts(givens, signs);
-        if (uniquelySolvable(clues, solution) && profileAccepts(puzzle, maxAbstractLine)) removed = true;
+        if (uniquelySolvable(clues, solution) && profileAccepts(puzzle, profile)) { removed = true; blanks++; }
         else givens[cell] = old;
       }
     }
@@ -237,40 +243,62 @@ window.TangoEngine = (() => {
     return givens;
   }
 
+  function chooseProfile() {
+    try {
+      const forced = localStorage.getItem('tangoMode');
+      const found = PROFILES.find(p => p.id === forced);
+      if (found) return found;
+    } catch (_) {}
+    const total = PROFILES.reduce((sum, p) => sum + p.weight, 0);
+    let roll = Math.random() * total;
+    for (const profile of PROFILES) {
+      roll -= profile.weight;
+      if (roll <= 0) return profile;
+    }
+    return PROFILES[1];
+  }
+
+  function generateWithProfile(profile) {
+    let best = null;
+    let bestScore = -Infinity;
+
+    for (let attempt = 0; attempt < profile.attempts; attempt++) {
+      const solution = randomSolution();
+      const signs = pickBalancedSigns(solution, profile);
+      const targetBlanks = randint(profile.blankMin, profile.blankMax);
+      const givens = unsolveCells(solution, signs, profile, targetBlanks);
+      const puzzle = puzzleFromParts(givens, signs, solution, profile.label);
+      const clues = cluesFromParts(givens, signs);
+      if (!uniquelySolvable(clues, solution) || !profileAccepts(puzzle, profile)) continue;
+
+      const blanks = givens.filter(v => v == null).length;
+      const inRange = blanks >= profile.blankMin && blanks <= profile.blankMax;
+      const score = (inRange ? 30 : 0) - Math.abs(blanks - targetBlanks) * 2 + blanks * 0.35 - puzzle.profile.abstractLine * 5 - Math.abs(puzzle.profile.steps - (profile.blankMin + profile.blankMax) / 2) * 0.2;
+      if (score > bestScore) { best = puzzle; bestScore = score; }
+      if (inRange && Math.random() < 0.35) return puzzle;
+    }
+
+    return best;
+  }
+
   function generatePuzzle() {
-    for (const maxAbstractLine of [0, 1, 2]) {
-      let best = null;
-      let bestScore = -Infinity;
-
-      for (let attempt = 0; attempt < 70; attempt++) {
-        const solution = randomSolution();
-        const signs = pickBalancedSigns(solution);
-        const givens = unsolveCells(solution, signs, maxAbstractLine);
-        const puzzle = puzzleFromParts(givens, signs, solution);
-        const clues = cluesFromParts(givens, signs);
-        if (!uniquelySolvable(clues, solution) || !profileAccepts(puzzle, maxAbstractLine)) continue;
-
-        const blanks = givens.filter(v => v == null).length;
-        const score = blanks - puzzle.profile.abstractLine * 8 - Math.max(0, puzzle.profile.steps - 25) * 0.3;
-        if (score > bestScore) { best = puzzle; bestScore = score; }
-
-        if (maxAbstractLine === 0 && blanks >= 12 && blanks <= 23) return puzzle;
-        if (maxAbstractLine === 1 && blanks >= 15 && blanks <= 25) return puzzle;
-        if (maxAbstractLine === 2 && blanks >= 17 && blanks <= 27) return puzzle;
-      }
-
-      if (best) return best;
+    const primary = chooseProfile();
+    const order = [primary].concat(shuffle(PROFILES.filter(p => p.id !== primary.id)));
+    for (const profile of order) {
+      const puzzle = generateWithProfile(profile);
+      if (puzzle) return puzzle;
     }
 
     const fallbackSolution = randomSolution();
-    const signs = pickBalancedSigns(fallbackSolution);
+    const profile = PROFILES[1];
+    const signs = pickBalancedSigns(fallbackSolution, profile);
     const givens = fallbackSolution.split('');
-    for (const i of shuffle(Array.from({ length: N * N }, (_, i) => i)).slice(0, 14)) givens[i] = null;
-    return puzzleFromParts(givens, signs, fallbackSolution);
+    for (const i of shuffle(Array.from({ length: N * N }, (_, i) => i)).slice(0, profile.blankMin)) givens[i] = null;
+    return puzzleFromParts(givens, signs, fallbackSolution, profile.label);
   }
 
   return {
-    N, H, SUN, MOON, ROWS, ALL_BOARDS, NICE_BOARDS,
+    N, H, SUN, MOON, ROWS, ALL_BOARDS, NICE_BOARDS, PROFILES,
     shuffle, countSymbol, hasThreeTogether, transitionCount,
     isPureZigzag, isStrongZigzag, boardShapeScore,
     cellIndex, lineCells, lineText, signCells, lineCandidates,
