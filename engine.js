@@ -19,9 +19,7 @@ window.TangoEngine = (() => {
   }
 
   function hasThreeTogether(text) {
-    for (let i = 0; i < text.length - 2; i++) {
-      if (text[i] === text[i + 1] && text[i] === text[i + 2]) return true;
-    }
+    for (let i = 0; i < text.length - 2; i++) if (text[i] === text[i + 1] && text[i] === text[i + 2]) return true;
     return false;
   }
 
@@ -162,9 +160,41 @@ window.TangoEngine = (() => {
     return candidates;
   }
 
+  function isAbstractReason(reason) {
+    const r = (reason || '').toLowerCase();
+    return r.includes('započtení') || r.includes('vychází') || r.includes('zbývají') || r.includes('variant') || r.includes('tvar') || r.includes('platné doplnění');
+  }
+
+  function solveProfile(puzzle) {
+    if (!window.TangoSolver) return { ok: true, steps: 0, abstractLine: 0 };
+    const sim = puzzle.givens.slice();
+    let steps = 0;
+    let abstractLine = 0;
+    let conflicts = 0;
+
+    for (let guard = 0; guard < 90; guard++) {
+      if (TangoSolver.completeAndLegal(sim, puzzle.signs)) return { ok: sim.join('') === puzzle.sol, steps, abstractLine, conflicts };
+      const step = TangoSolver.logicalStep(sim, puzzle);
+      if (!step) return { ok: false, steps, abstractLine, conflicts };
+      if (step.type === 'conflict') { conflicts++; return { ok: false, steps, abstractLine, conflicts }; }
+      if (step.type !== 'fill') return { ok: false, steps, abstractLine, conflicts };
+      if (isAbstractReason(step.reason)) abstractLine++;
+      sim[step.cell] = step.value;
+      steps++;
+    }
+
+    return { ok: false, steps, abstractLine, conflicts };
+  }
+
+  function profileAccepts(puzzle, maxAbstractLine) {
+    const profile = solveProfile(puzzle);
+    puzzle.profile = profile;
+    return profile.ok && profile.abstractLine <= maxAbstractLine;
+  }
+
   function pickBalancedSigns(solution) {
     const all = shuffle(allSignCluesForSolution(solution));
-    const target = 7 + Math.floor(Math.random() * 5);
+    const target = 8 + Math.floor(Math.random() * 5);
     const selected = [];
     const rowCount = Array(N).fill(0);
     const colCount = Array(N).fill(0);
@@ -172,10 +202,10 @@ window.TangoEngine = (() => {
     for (const sign of all) {
       if (selected.length >= target) break;
       if (sign.d === 'h') {
-        if (rowCount[sign.r] >= 2 && Math.random() < 0.75) continue;
+        if (rowCount[sign.r] >= 2 && Math.random() < 0.7) continue;
         rowCount[sign.r]++;
       } else {
-        if (colCount[sign.c] >= 2 && Math.random() < 0.75) continue;
+        if (colCount[sign.c] >= 2 && Math.random() < 0.7) continue;
         colCount[sign.c]++;
       }
       selected.push(sign);
@@ -185,9 +215,7 @@ window.TangoEngine = (() => {
     return selected;
   }
 
-  function humanSolvable(puzzle) { return !window.TangoSolver || TangoSolver.humanSolves(puzzle); }
-
-  function unsolveCells(solution, signs) {
+  function unsolveCells(solution, signs, maxAbstractLine) {
     const givens = solution.split('');
     let removed = true;
     let passes = 0;
@@ -201,7 +229,7 @@ window.TangoEngine = (() => {
         givens[cell] = null;
         const puzzle = puzzleFromParts(givens, signs, solution);
         const clues = cluesFromParts(givens, signs);
-        if (uniquelySolvable(clues, solution) && humanSolvable(puzzle)) removed = true;
+        if (uniquelySolvable(clues, solution) && profileAccepts(puzzle, maxAbstractLine)) removed = true;
         else givens[cell] = old;
       }
     }
@@ -210,25 +238,34 @@ window.TangoEngine = (() => {
   }
 
   function generatePuzzle() {
-    let best = null;
-    for (let attempt = 0; attempt < 100; attempt++) {
-      const solution = randomSolution();
-      const signs = pickBalancedSigns(solution);
-      const givens = unsolveCells(solution, signs);
-      const puzzle = puzzleFromParts(givens, signs, solution);
-      const clues = cluesFromParts(givens, signs);
-      if (!uniquelySolvable(clues, solution) || !humanSolvable(puzzle)) continue;
+    for (const maxAbstractLine of [0, 1, 2]) {
+      let best = null;
+      let bestScore = -Infinity;
 
-      const blanks = givens.filter(v => v == null).length;
-      if (blanks >= 18 && blanks <= 27) return puzzle;
-      if (!best || blanks > best.givens.filter(v => v == null).length) best = puzzle;
+      for (let attempt = 0; attempt < 70; attempt++) {
+        const solution = randomSolution();
+        const signs = pickBalancedSigns(solution);
+        const givens = unsolveCells(solution, signs, maxAbstractLine);
+        const puzzle = puzzleFromParts(givens, signs, solution);
+        const clues = cluesFromParts(givens, signs);
+        if (!uniquelySolvable(clues, solution) || !profileAccepts(puzzle, maxAbstractLine)) continue;
+
+        const blanks = givens.filter(v => v == null).length;
+        const score = blanks - puzzle.profile.abstractLine * 8 - Math.max(0, puzzle.profile.steps - 25) * 0.3;
+        if (score > bestScore) { best = puzzle; bestScore = score; }
+
+        if (maxAbstractLine === 0 && blanks >= 12 && blanks <= 23) return puzzle;
+        if (maxAbstractLine === 1 && blanks >= 15 && blanks <= 25) return puzzle;
+        if (maxAbstractLine === 2 && blanks >= 17 && blanks <= 27) return puzzle;
+      }
+
+      if (best) return best;
     }
 
-    if (best) return best;
     const fallbackSolution = randomSolution();
     const signs = pickBalancedSigns(fallbackSolution);
     const givens = fallbackSolution.split('');
-    for (const i of shuffle(Array.from({ length: N * N }, (_, i) => i)).slice(0, 18)) givens[i] = null;
+    for (const i of shuffle(Array.from({ length: N * N }, (_, i) => i)).slice(0, 14)) givens[i] = null;
     return puzzleFromParts(givens, signs, fallbackSolution);
   }
 
@@ -237,6 +274,6 @@ window.TangoEngine = (() => {
     shuffle, countSymbol, hasThreeTogether, transitionCount,
     isPureZigzag, isStrongZigzag, boardShapeScore,
     cellIndex, lineCells, lineText, signCells, lineCandidates,
-    generatePuzzle, uniquelySolvable, puzzleFromClues, puzzleFromParts
+    generatePuzzle, uniquelySolvable, puzzleFromClues, puzzleFromParts, solveProfile
   };
 })();
