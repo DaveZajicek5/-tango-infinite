@@ -15,6 +15,8 @@
 
   let boardWrap, cover, puzzle, state = [], started = false, solved = false;
   let startedAt = null, solvedAt = null, tick = null, hintMark = null, hintCount = 0;
+  let violationTimer = null;
+  const VIOLATION_DELAY = 900;
 
   function injectStyle() {
     if (!timerEl) {
@@ -49,6 +51,7 @@
   function cellCol(i) { return i % N; }
   function sameRow(cells) { return cells.length > 1 && cells.every(c => cellRow(c) === cellRow(cells[0])); }
   function sameCol(cells) { return cells.length > 1 && cells.every(c => cellCol(c) === cellCol(cells[0])); }
+  function clearScheduledViolation() { clearTimeout(violationTimer); violationTimer = null; }
 
   function stepKind(step) {
     const s = (step.reason || '').toLowerCase();
@@ -166,8 +169,19 @@
     mark(bad.cells, 'wrong'); show(bad.text, 'bad'); return true;
   }
 
+  function scheduleViolationCheck() {
+    clearScheduledViolation();
+    const signature = state.join('');
+    violationTimer = setTimeout(() => {
+      violationTimer = null;
+      if (!started || solved || state.join('') !== signature) return;
+      if (!showViolation()) show('');
+    }, VIOLATION_DELAY);
+  }
+
   function finishIfSolved() {
     if (solved || state.join('') !== puzzle.sol || !S.completeAndLegal(state, puzzle.signs)) return;
+    clearScheduledViolation();
     solved = true; started = false; solvedAt = Date.now(); clearHints(); stopTimer(); hideCover(); render();
     let best = Number(localStorage.getItem('tangoBestMs') || 0);
     const clean = hintCount === 0;
@@ -180,9 +194,11 @@
   function tap(i) {
     if (!started || solved || puzzle.givens[i] != null) return;
     state[i] = state[i] == null ? SUN : state[i] === SUN ? MOON : null;
-    clearHints(); clearPaint(); render();
-    if (!showViolation()) show('');
+    clearScheduledViolation(); clearHints(); clearPaint(); render();
     finishIfSolved();
+    if (solved) return;
+    if (S.immediateViolation(state, puzzle.signs)) scheduleViolationCheck();
+    else show('');
   }
 
   function showCover() {
@@ -197,20 +213,20 @@
   function hideCover() { cover?.classList.add('hidden'); }
 
   function newGame() {
-    newBtn.disabled = true; hintBtn.disabled = true; checkBtn.disabled = true;
+    clearScheduledViolation(); newBtn.disabled = true; hintBtn.disabled = true; checkBtn.disabled = true;
     stopTimer(); timerEl.textContent = '0:00'; show('Generuju novou hru…');
     setTimeout(() => {
-      puzzle = E.generatePuzzle(); state = puzzle.givens.slice(); started = false; solved = false; startedAt = null; solvedAt = null; hintCount = 0; clearHints(); render(); showCover();
+      puzzle = E.generatePuzzle(); state = puzzle.givens.slice(); started = false; solved = false; startedAt = null; solvedAt = null; hintCount = 0; clearHints(); clearPaint(); render(); showCover();
       show(`Připraveno. ${puzzleSummary()}.`); newBtn.disabled = false;
     }, 20);
   }
 
-  function startGame() { if (!puzzle || solved) return; started = true; startedAt = Date.now(); solvedAt = null; hideCover(); startTimer(); render(); show(''); }
-  function resetGame() { if (!puzzle) return; state = puzzle.givens.slice(); started = false; solved = false; startedAt = null; solvedAt = null; hintCount = 0; clearHints(); stopTimer(); timerEl.textContent = '0:00'; render(); showCover(); show('Resetováno. Čas začne až po Start.'); }
+  function startGame() { if (!puzzle || solved) return; clearScheduledViolation(); started = true; startedAt = Date.now(); solvedAt = null; hideCover(); startTimer(); render(); show(''); }
+  function resetGame() { if (!puzzle) return; clearScheduledViolation(); state = puzzle.givens.slice(); started = false; solved = false; startedAt = null; solvedAt = null; hintCount = 0; clearHints(); stopTimer(); timerEl.textContent = '0:00'; render(); showCover(); show('Resetováno. Čas začne až po Start.'); }
 
   function checkGame() {
     if (!started || solved) return;
-    clearPaint(); if (showViolation()) return;
+    clearScheduledViolation(); clearPaint(); if (showViolation()) return;
     const missing = state.some(v => v == null);
     const wrong = state.filter((v, i) => v != null && v !== puzzle.sol[i]).length;
     if (wrong) show(`${wrong} polí je legálních, ale nevede k finálnímu řešení.`, 'bad');
@@ -220,7 +236,7 @@
 
   function hint() {
     if (!started || solved) return;
-    clearPaint();
+    clearScheduledViolation(); clearPaint();
     const step = S.logicalStep(state, puzzle);
     if (!step) { clearHints(); render(); show('Nevidím jednoduchý krok. Některý legální tah může vést mimo řešení.', 'bad'); return; }
     if (step.type === 'conflict') { hintMark = { support: step.cells || [], focus: step.cells || [] }; render(); mark(step.cells, 'wrong'); show(step.text, 'bad'); return; }
