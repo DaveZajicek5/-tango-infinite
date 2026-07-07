@@ -5,9 +5,9 @@ window.TangoEngine = (() => {
   const MOON = '0';
 
   const PROFILES = [
-    { id: 'quick', label: 'Rychlá', weight: 3, signMin: 3, signMax: 6, blankMin: 7, blankMax: 12, abstractMax: 0, relationMax: 7, attempts: 55 },
-    { id: 'classic', label: 'Klasická', weight: 5, signMin: 3, signMax: 7, blankMin: 12, blankMax: 18, abstractMax: 1, relationMax: 8, attempts: 90 },
-    { id: 'hard', label: 'Těžší', weight: 3, signMin: 2, signMax: 6, blankMin: 16, blankMax: 24, abstractMax: 3, relationMax: 10, attempts: 120 }
+    { id: 'anchor', label: 'Anchor', weight: 3, signMin: 3, signMax: 5, blankMin: 24, blankMax: 26, abstractMax: 1, relationMax: 9, attempts: 90 },
+    { id: 'classic', label: 'Klasická', weight: 6, signMin: 4, signMax: 7, blankMin: 27, blankMax: 30, abstractMax: 2, relationMax: 13, attempts: 140 },
+    { id: 'sparse', label: 'Sparse', weight: 3, signMin: 6, signMax: 10, blankMin: 30, blankMax: 32, abstractMax: 4, relationMax: 17, attempts: 180 }
   ];
 
   function shuffle(items) {
@@ -213,10 +213,10 @@ window.TangoEngine = (() => {
     for (const sign of all) {
       if (selected.length >= target) break;
       if (sign.d === 'h') {
-        if (rowCount[sign.r] >= 1 && Math.random() < 0.65) continue;
+        if (rowCount[sign.r] >= 1 && Math.random() < 0.6) continue;
         rowCount[sign.r]++;
       } else {
-        if (colCount[sign.c] >= 1 && Math.random() < 0.65) continue;
+        if (colCount[sign.c] >= 1 && Math.random() < 0.6) continue;
         colCount[sign.c]++;
       }
       selected.push(sign);
@@ -232,7 +232,7 @@ window.TangoEngine = (() => {
     let removed = true;
     let passes = 0;
 
-    while (removed && passes < 4 && blanks < targetBlanks) {
+    while (removed && passes < 5 && blanks < targetBlanks) {
       removed = false;
       passes++;
       for (const cell of shuffle(Array.from({ length: N * N }, (_, i) => i))) {
@@ -277,9 +277,9 @@ window.TangoEngine = (() => {
 
       const blanks = givens.filter(v => v == null).length;
       const inRange = blanks >= profile.blankMin && blanks <= profile.blankMax;
-      const score = (inRange ? 30 : 0) - Math.abs(blanks - targetBlanks) * 2 + blanks * 0.3 - puzzle.profile.abstractLine * 7 - puzzle.profile.relation * 0.8;
+      const score = (inRange ? 35 : 0) - Math.abs(blanks - targetBlanks) * 2 + blanks * 0.25 - puzzle.profile.abstractLine * 5 - Math.max(0, puzzle.profile.relation - 10) * 0.7;
       if (score > bestScore) { best = puzzle; bestScore = score; }
-      if (inRange && Math.random() < 0.3) return puzzle;
+      if (inRange && Math.random() < 0.35) return puzzle;
     }
 
     return best;
