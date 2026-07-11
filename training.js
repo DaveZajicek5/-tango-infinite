@@ -27,8 +27,13 @@
 
   function saveStats() { localStorage.setItem(STORAGE_KEY, JSON.stringify(stats)); }
   function delayMs() { return Number(delaySelect.value || 5) * 1000; }
-  function signature() { return [...board.querySelectorAll('td')].map(td => td.querySelector('.sun') ? 'S' : td.querySelector('.moon') ? 'M' : '.').join(''); }
+  function signature() { return [...board.querySelectorAll('td')].map(td => currentValue(td)).join(''); }
   function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+  function currentValue(td) {
+    const real = td.querySelector('.token:not(.hintGhost)');
+    return real?.classList.contains('sun') ? 'S' : real?.classList.contains('moon') ? 'M' : '.';
+  }
 
   function startStep() {
     if (!enabled || revealing) return;
@@ -84,6 +89,7 @@
       return;
     }
     const wanted = ghost.classList.contains('sun') ? 'S' : 'M';
+    const current = currentValue(target);
     const technique = techniqueFromHint();
     target.animate([
       { transform: 'scale(1)', outlineWidth: '4px' },
@@ -91,16 +97,14 @@
       { transform: 'scale(1)', outlineWidth: '4px' }
     ], { duration: 650, easing: 'ease-in-out' });
     await sleep(900);
-    for (let i = 0; i < 3 && cellValue(target) !== wanted; i++) target.click();
+    const cycle = ['.', 'S', 'M'];
+    const clicks = (cycle.indexOf(wanted) - cycle.indexOf(current) + cycle.length) % cycle.length;
+    for (let i = 0; i < clicks; i++) target.click();
     record(technique, delayMs(), true);
     coachText.textContent = `${technique}: tah byl předveden.`;
     await sleep(450);
     revealing = false;
     startStep();
-  }
-
-  function cellValue(td) {
-    return td.querySelector('.sun') ? 'S' : td.querySelector('.moon') ? 'M' : '.';
   }
 
   function toggleTraining() {
@@ -124,9 +128,10 @@
 
   board.addEventListener('click', event => {
     if (!enabled || revealing || !event.target.closest('td')) return;
+    const before = lastSignature;
     setTimeout(() => {
       const next = signature();
-      if (!next || next === lastSignature) return;
+      if (!next || next === before) return;
       const elapsed = performance.now() - stepStartedAt;
       record('Samostatně nalezený krok', elapsed, false);
       coachText.textContent = `Krok nalezen za ${(elapsed / 1000).toFixed(2)} s.`;
